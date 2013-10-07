@@ -5,6 +5,8 @@ import (
 	"github.com/krig/Go-SDL2/sdl"
 	"github.com/krig/Go-SDL2/ttf"
 	"log"
+	"math"
+	"math/rand"
 )
 
 type Track interface {
@@ -72,13 +74,14 @@ func main() {
 	}
 	defer sdl.Quit()
 
-	window, rend := sdl.CreateWindowAndRenderer(640, 480, sdl.WINDOW_SHOWN |
+	window, rend := sdl.CreateWindowAndRenderer(640, 480, sdl.WINDOW_SHOWN | sdl.WINDOW_OPENGL |
 		sdl.RENDERER_ACCELERATED |
 		sdl.RENDERER_PRESENTVSYNC)
 	if (window == nil) || (rend == nil) {
 		log.Fatal(sdl.GetError())
 	}
 	defer window.Destroy()
+	defer rend.Destroy()
 
 	if ttf.Init() != 0 {
 		log.Fatal(sdl.GetError())
@@ -86,6 +89,8 @@ func main() {
 	defer ttf.Quit()
 
 	window.SetTitle("Podcast Studio")
+
+	log.Println("Video Driver:", sdl.GetCurrentVideoDriver())
 
 
 	garoa := ttf.OpenFont("data/GaroaHackerClubeBold.otf", 10)
@@ -96,6 +101,16 @@ func main() {
 
 	running := true
 	event := &sdl.Event{}
+	wobble := 1.0
+	dim := 100.0
+	state := 0.0
+	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	rend.SetDrawColor(sdl.Color{0x30, 0x30, 0x30, 0xFF})
+	rend.Clear()
+
+	var t uint64 = 0
+
 	for running {
 		for event.Poll() {
 			switch e := event.Get().(type) {
@@ -109,17 +124,22 @@ func main() {
 			}
 		}
 
+		w, h := window.GetSize()
+		wobble = rnd.Float64()
+		state += 0.02
+		dim = 100.0 + math.Sin(state) * 15.0 + wobble
+
 		rend.SetDrawColor(sdl.Color{0x30, 0x30, 0x30, 0xFF})
 		rend.Clear()
 		rend.SetDrawColor(sdl.Color{0xFF, 0x1F, 0x69, 0xFF})
-		w, h := window.GetSize()
-		rend.DrawLine(w/2, h/2 - 100, w/2 + 100, h/2 + 100)
-		rend.DrawLine(w/2 - 100, h/2 + 100, w/2 + 100, h/2 + 100)
-		rend.DrawLine(w/2, h/2 - 100, w/2 - 100, h/2 + 100)
+		rend.DrawLine(w/2, h/2 - int(dim), w/2 + int(dim), h/2 + int(dim))
+		rend.DrawLine(w/2 - int(dim), h/2 + int(dim), w/2 + int(dim), h/2 + int(dim))
+		rend.DrawLine(w/2, h/2 - int(dim), w/2 - int(dim), h/2 + int(dim))
 
-		rend.Copy(txt_tex, nil, &sdl.Rect{int32(w/2 - txt_w/2), int32(h/2 + 100 + txt_h), int32(txt_w), int32(txt_h)})
-
+		rend.Copy(txt_tex, nil, &sdl.Rect{int32(w/2 - txt_w/2), int32(h/2 + int(dim) + txt_h), int32(txt_w), int32(txt_h)})
 		rend.Present()
-		sdl.Delay(10);
+		sdl.Delay(5);
+
+		t += 1
 	}
 }
