@@ -68,31 +68,7 @@ func RenderTextToTexture(r *sdl.Renderer, f *ttf.Font, text string, color sdl.Co
 	return txt_tex, textw, texth
 }
 
-func main() {
-	if sdl.Init(sdl.INIT_EVERYTHING) != 0 {
-		log.Fatal(sdl.GetError())
-	}
-	defer sdl.Quit()
-
-	window, rend := sdl.CreateWindowAndRenderer(640, 480, sdl.WINDOW_SHOWN | sdl.WINDOW_OPENGL |
-		sdl.RENDERER_ACCELERATED |
-		sdl.RENDERER_PRESENTVSYNC)
-	if (window == nil) || (rend == nil) {
-		log.Fatal(sdl.GetError())
-	}
-	defer window.Destroy()
-	defer rend.Destroy()
-
-	if ttf.Init() != 0 {
-		log.Fatal(sdl.GetError())
-	}
-	defer ttf.Quit()
-
-	window.SetTitle("Podcast Studio")
-
-	log.Println("Video Driver:", sdl.GetCurrentVideoDriver())
-
-
+func run_studio(window *sdl.Window, rend *sdl.Renderer) {
 	garoa := ttf.OpenFont("data/GaroaHackerClubeBold.otf", 10)
 	defer garoa.Close()
 
