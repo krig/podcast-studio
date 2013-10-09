@@ -1,44 +1,49 @@
 package main
 
 import (
-	"time"
 	"github.com/krig/Go-SDL2/sdl"
 	"github.com/krig/Go-SDL2/ttf"
-	"log"
-	"math"
-	"math/rand"
 )
 
-func RenderTextToTexture(r *sdl.Renderer, f *ttf.Font, text string, color sdl.Color) (*sdl.Texture, int, int) {
-	textw, texth, err := f.SizeText(text)
-	if err != nil {
-		log.Fatal(err)
-	}
-	txt_surface := f.RenderText_Blended(text, color)
-	txt_tex := r.CreateTextureFromSurface(txt_surface)
-	txt_surface.Free()
-	return txt_tex, textw, texth
+type Resources struct {
+	renderer *sdl.Renderer
+	TitleFont *ttf.Font
+	PlayButton *sdl.Texture
+	LEDButton *sdl.Texture
+}
+
+func (r *Resources) Load(rend *sdl.Renderer) {
+	r.renderer = rend
+
+	r.TitleFont = ttf.OpenFont("data/GaroaHackerClubeBold.otf", 10)
+
+	playbutton := sdl.Load("data/testbutton.png")
+	r.PlayButton = rend.CreateTextureFromSurface(playbutton)
+	playbutton.Free()
+
+	ledbutton := sdl.Load("data/testbutton_blank.png")
+	r.LEDButton = rend.CreateTextureFromSurface(ledbutton)
+	ledbutton.Free()
+}
+
+func (r *Resources) Free() {
+	r.TitleFont.Close()
+	r.PlayButton.Destroy()
 }
 
 func run_studio(window *sdl.Window, rend *sdl.Renderer) {
-	garoa := ttf.OpenFont("data/GaroaHackerClubeBold.otf", 10)
-	defer garoa.Close()
+	rsc := &Resources{}
+	rsc.Load(rend)
+	defer rsc.Free()
 
-	txt_tex, txt_w, txt_h := RenderTextToTexture(rend, garoa, "PODCAST STUDIO", sdl.Color{0xFF, 0xFF, 0xFF, 0xFF})
-	defer txt_tex.Destroy()
+	w, h := window.GetSize()
+	neww, newh := w, h
+	screen := &Screen{}
+	screen.Init(sdl.Rect{0, 0, int32(w), int32(h)}, rsc)
+	defer screen.Destroy()
 
-	running := true
 	event := &sdl.Event{}
-	wobble := 1.0
-	dim := 100.0
-	state := 0.0
-	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	rend.SetDrawColor(sdl.Color{0x30, 0x30, 0x30, 0xFF})
-	rend.Clear()
-
-	var t uint64 = 0
-
+	running := true
 	for running {
 		for event.Poll() {
 			switch e := event.Get().(type) {
@@ -52,22 +57,17 @@ func run_studio(window *sdl.Window, rend *sdl.Renderer) {
 			}
 		}
 
-		w, h := window.GetSize()
-		wobble = rnd.Float64()
-		state += 0.02
-		dim = 100.0 + math.Sin(state) * 15.0 + wobble
+		neww, newh = window.GetSize()
+		if neww != w || newh != h {
+			w = neww
+			h = newh
+			screen.UpdateLayout(sdl.Rect{0, 0, int32(w), int32(h)})
+		}
 
-		rend.SetDrawColor(sdl.Color{0x30, 0x30, 0x30, 0xFF})
+		rend.SetDrawColor(hexcolor(0x303030))
 		rend.Clear()
-		rend.SetDrawColor(sdl.Color{0xFF, 0x1F, 0x69, 0xFF})
-		rend.DrawLine(w/2, h/2 - int(dim), w/2 + int(dim), h/2 + int(dim))
-		rend.DrawLine(w/2 - int(dim), h/2 + int(dim), w/2 + int(dim), h/2 + int(dim))
-		rend.DrawLine(w/2, h/2 - int(dim), w/2 - int(dim), h/2 + int(dim))
-
-		rend.Copy(txt_tex, nil, &sdl.Rect{int32(w/2 - txt_w/2), int32(h/2 + int(dim) + txt_h), int32(txt_w), int32(txt_h)})
+		rend.SetDrawColor(hexcolor(0xffffff))
+		screen.Draw(rend)
 		rend.Present()
-		sdl.Delay(5);
-
-		t += 1
 	}
 }
