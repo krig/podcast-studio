@@ -68,24 +68,6 @@ type TopBar struct {
 	BackgroundColor sdl.Color
 }
 
-type Node struct {
-	Widget
-	Type int
-	
-}
-
-type Link struct {
-	Widget
-	A *Node
-	B *Node
-}
-
-type CanvasPane struct {
-	Pane
-	nodes []*Node
-	links []*Link
-}
-
 func (widget *Widget) GetPos() sdl.Rect {
 	return widget.Pos
 }
@@ -185,12 +167,6 @@ func (tb *TopBar) Draw(rend *sdl.Renderer) {
 	for _, w := range tb.elements_right {
 		w.Draw(rend)
 	}
-}
-
-func (canvas *CanvasPane) Draw(rend *sdl.Renderer) {
-}
-
-func (canvas *CanvasPane) UpdateLayout(space sdl.Rect) {
 }
 
 func (button *Button) Init(rend *sdl.Renderer, space sdl.Rect, texture *sdl.Texture) {

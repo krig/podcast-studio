@@ -72,6 +72,37 @@ func (stack *InputStack) OnMouseButtonEvent(event *sdl.MouseButtonEvent) bool {
 	return true
 }
 
+type PopupMenu struct {
+	Widget
+	entries []*sdl.Texture
+	Visible bool
+}
+
+type Node struct {
+	Widget
+	Type int
+}
+
+type Link struct {
+	Widget
+	A *Node
+	B *Node
+}
+
+type CanvasPane struct {
+	Pane
+	nodes []*Node
+	links []*Link
+}
+
+func (menu *PopupMenu) Draw(rend *sdl.Renderer) {
+}
+
+func (canvas *CanvasPane) Draw(rend *sdl.Renderer) {
+}
+
+func (canvas *CanvasPane) UpdateLayout(space sdl.Rect) {
+}
 
 func (screen *Screen) Init(space sdl.Rect, rsc *Resources) {
 	topbarHeight := int32(32)
