@@ -1,0 +1,8 @@
+["TitleFont", "data/Tuffy.otf"]
+["TitleFontSize", "12"]
+["PlayButton", "data/play2.png"]
+["StopButton", "data/stop2.png"]
+["LEDButton", "data/testbutton_blank.png"]
+["BackgroundColor", "0x202020"]
+["TitleBarColor", "0x2f2f2f"]
+["TitleColor", "0x909090"]

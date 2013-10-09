@@ -12,24 +12,23 @@ type Resources struct {
 	PlayButton *sdl.Texture
 	StopButton *sdl.Texture
 	LEDButton *sdl.Texture
+	BackgroundColor sdl.Color
+	TitleBarColor sdl.Color
+	TitleColor sdl.Color
 }
 
 func (r *Resources) Load(rend *sdl.Renderer) {
+
 	r.renderer = rend
 
-	r.TitleFont = ttf.OpenFont("data/GaroaHackerClubeBold.otf", 12)
-
-	playbutton := sdl.Load("data/play2.png")
-	r.PlayButton = rend.CreateTextureFromSurface(playbutton)
-	playbutton.Free()
-
-	stopbutton := sdl.Load("data/stop2.png")
-	r.StopButton = rend.CreateTextureFromSurface(stopbutton)
-	stopbutton.Free()
-
-	ledbutton := sdl.Load("data/testbutton_blank.png")
-	r.LEDButton = rend.CreateTextureFromSurface(ledbutton)
-	ledbutton.Free()
+	cfg := NewConfig("data/config.json")
+	r.TitleFont = ttf.OpenFont(cfg.String("TitleFont"), cfg.Int("TitleFontSize"))
+	r.PlayButton = cfg.Texture(rend, "PlayButton")
+	r.StopButton = cfg.Texture(rend, "StopButton")
+	r.LEDButton = cfg.Texture(rend, "LEDButton")
+	r.BackgroundColor = cfg.Color("BackgroundColor")
+	r.TitleBarColor = cfg.Color("TitleBarColor")
+	r.TitleColor = cfg.Color("TitleColor")
 }
 
 func (r *Resources) Free() {
@@ -79,6 +78,7 @@ func (screen *Screen) Init(space sdl.Rect, rsc *Resources) {
 	screen.Pos = space
 	screen.TopBar = &TopBar{}
 	screen.TopBar.Init(sdl.Rect{space.X, space.Y, space.W, topbarHeight})
+	screen.TopBar.BackgroundColor = rsc.TitleBarColor
 	screen.F1 = &Button{}
 	screen.F2 = &Button{}
 	screen.Title = &Label{}
@@ -93,7 +93,7 @@ func (screen *Screen) Init(space sdl.Rect, rsc *Resources) {
 
 	screen.F1.Init(rsc.renderer, sdl.Rect{space.X, space.Y, 1, 1}, rsc.LEDButton)
 	screen.F2.Init(rsc.renderer, sdl.Rect{screen.F1.Pos.X + screen.F1.Pos.W, space.Y, 1, 1}, rsc.LEDButton)
-	screen.Title.Init(rsc.renderer, sdl.Rect{screen.F2.Pos.X + screen.F2.Pos.W, space.Y, 1, topbarHeight}, "canvas mode", rsc.TitleFont, hexcolor(0x777777))
+	screen.Title.Init(rsc.renderer, sdl.Rect{screen.F2.Pos.X + screen.F2.Pos.W, space.Y, 1, topbarHeight}, "canvas mode", rsc.TitleFont, rsc.TitleColor)
 	screen.Play.Init(rsc.renderer, sdl.Rect{screen.Title.Pos.X + screen.Title.Pos.W, space.Y, 1, 1}, rsc.PlayButton)
 	screen.Stop.Init(rsc.renderer, sdl.Rect{screen.Play.Pos.X + screen.Play.Pos.W, space.Y, 1, 1}, rsc.StopButton)
 
@@ -170,10 +170,9 @@ func run_studio(window *sdl.Window, rend *sdl.Renderer) {
 		}
 
 		rend.SetDrawBlendMode(sdl.BLENDMODE_NONE)
-		rend.SetDrawColor(hexcolor(0x303030))
+		rend.SetDrawColor(rsc.BackgroundColor)
 		rend.Clear()
 		rend.SetDrawBlendMode(sdl.BLENDMODE_BLEND)
-		rend.SetDrawColor(hexcolor(0xffffff))
 		screen.Draw(rend)
 		rend.Present()
 	}

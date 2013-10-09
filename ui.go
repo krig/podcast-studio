@@ -65,10 +65,13 @@ type HorizontalLayout struct {
 
 type TopBar struct {
 	HorizontalLayout
+	BackgroundColor sdl.Color
 }
 
 type Node struct {
 	Widget
+	Type int
+	
 }
 
 type Link struct {
@@ -170,9 +173,8 @@ func (h *HorizontalLayout) Destroy() {
 }
 
 func (tb *TopBar) Draw(rend *sdl.Renderer) {
-	rend.SetDrawColor(hexcolor(0x404040))
+	rend.SetDrawColor(tb.BackgroundColor)
 	rend.FillRect(&tb.Pos)
-	rend.SetDrawColor(hexcolor(0xffffff))
 
 	for _, w := range tb.elements_left {
 		w.Draw(rend)
