@@ -3,11 +3,17 @@ package main
 import (
 	"github.com/krig/Go-SDL2/sdl"
 	"github.com/krig/Go-SDL2/ttf"
+	"github.com/krig/go-sox"
 	"log"
 )
 
 func main() {
-	if sdl.Init(sdl.INIT_EVERYTHING) != 0 {
+	if !sox.Init() {
+		log.Fatal("Failed to init sox")
+	}
+	defer sox.Quit()
+
+	if sdl.Init(sdl.INIT_NOPARACHUTE|sdl.INIT_VIDEO|sdl.INIT_EVENTS) != 0 {
 		log.Fatal(sdl.GetError())
 	}
 	defer sdl.Quit()

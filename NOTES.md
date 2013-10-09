@@ -7,6 +7,10 @@ care much about collisions etc, and connections will be color-coded to
 show which nodes connect to what. One nice thing would be to highlight
 the complete chain from source to sink when selecting a source.
 
+# libsox
+
+Write a go wrapper for libsox, use it to play sound
+
 # Model
 
 OK, so here are the node types:
