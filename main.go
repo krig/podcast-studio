@@ -6,10 +6,27 @@ import (
 	"github.com/krig/go-sox"
 	//"github.com/mattn/go-gtk/gtk"
 	"log"
-	"fmt"
+	//"fmt"
+	"flag"
 )
 
 func main() {
+	flag.Parse()
+
+	session := "default"
+	if flag.NArg() > 0 {
+		session = flag.Arg(0)
+	}
+
+	log.Println("Session: ", session)
+
+	tracks := []string{}
+	if flag.NArg() > 1 {
+		tracks = flag.Args()[1:]
+	}
+
+	log.Println("Tracks: ", tracks)
+
 	if !sox.Init() {
 		log.Fatal("Failed to init sox")
 	}

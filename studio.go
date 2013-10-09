@@ -9,54 +9,6 @@ import (
 	"math/rand"
 )
 
-type Track interface {
-}
-
-type Sample interface {
-}
-
-type Node interface {
-}
-
-type Link interface {
-}
-
-type Studio struct {
-	mode int
-}
-
-type Model struct {
-	tracks *[]Track
-	samples *[]Sample
-	nodes *[]Node
-	links *[]Link
-	playback_state uint64
-	position uint64
-}
-
-type CanvasView struct {
-}
-
-type TrackView struct {
-}
-
-type StudioController struct {
-}
-
-func update_playback() {
-}
-
-func update_animations() {
-}
-
-func player_loop() {
-	for {
-		update_playback()
-		update_animations()
-		time.Sleep(10 * 1e6) // 10 ms
-	}
-}
-
 func RenderTextToTexture(r *sdl.Renderer, f *ttf.Font, text string, color sdl.Color) (*sdl.Texture, int, int) {
 	textw, texth, err := f.SizeText(text)
 	if err != nil {
