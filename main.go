@@ -29,6 +29,18 @@ func main() {
 	}
 	defer sox.Quit()
 
+	einfo := sox.GetEncodingsInfo()
+	log.Println("Supported encodings:")
+	for _, e := range einfo {
+		log.Printf("%s: %s (%x)\n", e.Name, e.Desc, e.Flags)
+	}
+
+	effects := sox.GetEffectHandlers()
+	log.Println("Supported effects:")
+	for _, e := range effects {
+		log.Printf("%s: %s (%x)\n", e.Name(), e.Usage(), e.Flags())
+	}
+
 	if sdl.Init(sdl.INIT_NOPARACHUTE|sdl.INIT_VIDEO|sdl.INIT_EVENTS) != 0 {
 		log.Fatal(sdl.GetError())
 	}
