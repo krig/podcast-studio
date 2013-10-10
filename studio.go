@@ -1,3 +1,4 @@
+// Podcast Studio, a podcast mixing/mastering app under construction.
 package main
 
 import (
@@ -5,6 +6,7 @@ import (
 
 	"github.com/krig/Go-SDL2/sdl"
 	"github.com/krig/Go-SDL2/ttf"
+	"github.com/krig/Go-SDL2/gfx"
 	"github.com/krig/go-sox"
 )
 
@@ -185,6 +187,8 @@ func run_studio(window *sdl.Window, rend *sdl.Renderer) {
 	stack.Add(screen.Stop)
 	defer screen.Destroy()
 
+	framerate := gfx.NewFramerate()
+	framerate.SetFramerate(30)
 	event := &sdl.Event{}
 	running := true
 	for running {
@@ -219,5 +223,6 @@ func run_studio(window *sdl.Window, rend *sdl.Renderer) {
 		rend.SetDrawBlendMode(sdl.BLENDMODE_BLEND)
 		screen.Draw(rend)
 		rend.Present()
+		framerate.FramerateDelay()
 	}
 }

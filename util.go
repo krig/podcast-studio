@@ -1,4 +1,3 @@
-// Utility functions for Podcast Studio
 package main
 
 import (
