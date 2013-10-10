@@ -64,9 +64,18 @@ type HorizontalLayout struct {
 	HSpacing int32
 }
 
-type TopBar struct {
-	HorizontalLayout
-	BackgroundColor sdl.Color
+type MenuEntry struct {
+	Text string
+	label *Label
+}
+
+type PopupMenu struct {
+	Widget
+	entries []MenuEntry
+	hover *MenuEntry
+	Visible bool
+	Spacing, Inset int32
+	clickhandler func(entry *MenuEntry)
 }
 
 func (widget *Widget) GetPos() sdl.Rect {
@@ -155,21 +164,6 @@ func (h *HorizontalLayout) Destroy() {
 	}
 }
 
-func (tb *TopBar) Draw(rend *sdl.Renderer) {
-	rend.SetDrawColor(tb.BackgroundColor)
-	rend.FillRect(&tb.Pos)
-
-	for _, w := range tb.elements_left {
-		w.Draw(rend)
-	}
-	if tb.element_center != nil {
-		tb.element_center.Draw(rend)
-	}
-	for _, w := range tb.elements_right {
-		w.Draw(rend)
-	}
-}
-
 func (button *Button) Init(rend *sdl.Renderer, space sdl.Rect, texture *sdl.Texture) {
 	button.Pos = space
 	button.texture = texture
@@ -209,7 +203,7 @@ func (button *Button) OnMouseMotionEvent(event *sdl.MouseMotionEvent) bool {
 }
 
 func (button *Button) OnMouseButtonEvent(event *sdl.MouseButtonEvent) bool {
-	if (event.Button == sdl.BUTTON_LEFT) {
+	if event.Button == sdl.BUTTON_LEFT {
 		contains := button.Pos.Contains(event.X, event.Y)
 		pressed := event.State == sdl.PRESSED
 		was_pressed := (button.State & 2) != 0
@@ -262,4 +256,117 @@ func (button *Button) Draw(rend *sdl.Renderer) {
 func (label *Label) Draw(rend *sdl.Renderer) {
 	pos := sdl.Rect{label.Pos.X + (label.Pos.W - label.texwidth) / 2, label.Pos.Y + (label.Pos.H - label.texheight)/2, label.texwidth, label.texheight}
 	rend.Copy(label.texture, nil, &pos)
+}
+
+// Init a popup menu
+func (menu *PopupMenu) Init(rend *sdl.Renderer, space sdl.Rect, entries []string, font *ttf.Font) {
+	menu.Pos = space
+	menu.Inset = 4
+	menu.Spacing = 16
+	entry_pos := sdl.Rect{menu.Pos.X + menu.Inset,
+		menu.Pos.Y + menu.Inset,
+		menu.Pos.W - menu.Inset*2,
+		menu.Spacing}
+	max_w := int32(0)
+	for i, e := range entries {
+		menu.entries = append(menu.entries, MenuEntry{})
+		menu.entries[i].Init(rend, entry_pos, e, font, hexcolor(0xeeeeec))
+		if menu.entries[i].label.texwidth > max_w {
+			max_w = menu.entries[i].label.texwidth
+		}
+		entry_pos.Y += menu.Spacing
+	}
+	menu.Pos.W = max_w + menu.Inset*2
+	menu.Pos.H = int32(len(entries))*menu.Spacing + menu.Inset*2
+
+	for _, e := range menu.entries {
+		e.label.Pos.W = menu.Pos.W - menu.Inset*2
+		e.label.Pos.H = menu.Spacing
+	}
+}
+
+func (menu *PopupMenu) OnClick(handler func(entry *MenuEntry)) {
+	menu.clickhandler = handler
+}
+
+// Draw a popup menu
+func (menu *PopupMenu) Draw(rend *sdl.Renderer) {
+	if !menu.Visible {
+		return
+	}
+	rend.SetDrawColor(hexcolor(0x303030))
+	rend.FillRect(&menu.Pos)
+	rend.SetDrawColor(hexcolor(0x363636))
+	rend.DrawRect(&menu.Pos)
+	if menu.hover != nil {
+		rend.SetDrawColor(hexcolor(0x40ff40))
+		rend.FillRect(&menu.hover.label.Pos)
+	}
+	for _, e := range menu.entries {
+		e.Draw(rend)
+	}
+}
+
+func (menu *PopupMenu) UpdateLayout(space sdl.Rect) {
+	// TODO
+}
+
+func (menu *PopupMenu) Show(x, y int32) {
+	menu.Visible = true
+	menu.Pos.X = x
+	menu.Pos.Y = y
+	new_x := menu.Pos.X + menu.Inset
+	new_y := menu.Pos.Y + menu.Inset
+	for _, e := range menu.entries {
+		e.label.Pos.X = new_x
+		e.label.Pos.Y = new_y
+		new_y += menu.Spacing
+		if e.label.Pos.Contains(x, y) {
+			menu.hover = &e
+		}
+	}
+}
+
+func (menu *PopupMenu) Hide() {
+	menu.Visible = false
+	menu.hover = nil
+}
+
+func (entry *MenuEntry) Init(rend *sdl.Renderer, space sdl.Rect, text string, font *ttf.Font, color sdl.Color) {
+	entry.Text = text
+	entry.label = &Label{}
+	entry.label.Init(rend, space, text, font, color)
+}
+
+func (entry *MenuEntry) Draw(rend *sdl.Renderer) {
+	entry.label.Draw(rend)
+}
+
+func (menu *PopupMenu) OnMouseMotionEvent(event *sdl.MouseMotionEvent) bool {
+	menu.hover = nil
+	if menu.Visible {
+		for _, e := range menu.entries {
+			if e.label.Pos.Contains(event.X, event.Y) {
+				menu.hover = &e
+			}
+		}
+	} else {
+	}
+	return true
+}
+
+func (menu *PopupMenu) OnMouseButtonEvent(event *sdl.MouseButtonEvent) bool {
+	if menu.Visible {
+		if event.Button == sdl.BUTTON_LEFT {
+			contains := menu.Pos.Contains(event.X, event.Y)
+			pressed := event.State == sdl.PRESSED
+			was_pressed := menu.hover != nil
+			if was_pressed && !pressed && contains {
+				if menu.clickhandler != nil {
+					menu.clickhandler(menu.hover)
+				}
+			}
+		}
+	}
+	return true
 }

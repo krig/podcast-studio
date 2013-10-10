@@ -21,30 +21,6 @@ type Resources struct {
 	TitleColor sdl.Color
 }
 
-type Screen struct {
-	Pane
-	TopBar *TopBar
-	F1 *Button
-	F2 *Button
-	Title *Label
-	Play *Button
-	Stop *Button
-
-	Canvas *CanvasPane
-	//Tracks *TrackPane
-	//Current *Pane
-}
-
-type InputStack struct {
-	lovers []MouseLover
-}
-
-type PopupMenu struct {
-	Widget
-	entries []*sdl.Texture
-	Visible bool
-}
-
 type Node struct {
 	Widget
 	label string
@@ -68,9 +44,33 @@ type SoundChain struct {
 	links []*Link
 }
 
+type TopBar struct {
+	HorizontalLayout
+	BackgroundColor sdl.Color
+}
+
 type CanvasPane struct {
 	Pane
-	soundchain *SoundChain
+	soundchain SoundChain
+	menu PopupMenu
+}
+
+type Screen struct {
+	Pane
+	TopBar *TopBar
+	F1 *Button
+	F2 *Button
+	Title *Label
+	Play *Button
+	Stop *Button
+
+	Canvas *CanvasPane
+	//Tracks *TrackPane
+	//Current *Pane
+}
+
+type InputStack struct {
+	lovers []MouseLover
 }
 
 func (r *Resources) Load(rend *sdl.Renderer) {
@@ -110,14 +110,62 @@ func (stack *InputStack) OnMouseButtonEvent(event *sdl.MouseButtonEvent) bool {
 	return true
 }
 
-func (menu *PopupMenu) Draw(rend *sdl.Renderer) {
+func (tb *TopBar) Draw(rend *sdl.Renderer) {
+	rend.SetDrawColor(tb.BackgroundColor)
+	rend.FillRect(&tb.Pos)
+	rend.SetDrawColor(lighten(tb.BackgroundColor, 9))
+	rend.DrawLine(tb.Pos.X, tb.Pos.Y + tb.Pos.H - 1, tb.Pos.X + tb.Pos.W, tb.Pos.Y + tb.Pos.H - 1)
+	rend.SetDrawColor(darken(tb.BackgroundColor, 9))
+	rend.DrawLine(tb.Pos.X, tb.Pos.Y + tb.Pos.H, tb.Pos.X + tb.Pos.W, tb.Pos.Y + tb.Pos.H)
+
+	for _, w := range tb.elements_left {
+		w.Draw(rend)
+	}
+	if tb.element_center != nil {
+		tb.element_center.Draw(rend)
+	}
+	for _, w := range tb.elements_right {
+		w.Draw(rend)
+	}
+}
+
+func (canvas *CanvasPane) Init(rsc *Resources, space sdl.Rect) {
+	canvas.Pos = space
+	canvas.menu.Init(rsc.renderer, space, []string{"New Input", "New Output", "New Effect"}, rsc.TitleFont)
+
+	canvas.menu.OnClick(func(entry *MenuEntry) {
+		log.Println("Clicked: " + entry.Text)
+	})
 }
 
 func (canvas *CanvasPane) Draw(rend *sdl.Renderer) {
+	canvas.menu.Draw(rend)
 }
 
 func (canvas *CanvasPane) UpdateLayout(space sdl.Rect) {
+	canvas.menu.UpdateLayout(space)
 }
+
+func (canvas *CanvasPane) OnMouseMotionEvent(event *sdl.MouseMotionEvent) bool {
+	if canvas.menu.Visible {
+		canvas.menu.OnMouseMotionEvent(event)
+	}
+	return true
+}
+
+func (canvas *CanvasPane) OnMouseButtonEvent(event *sdl.MouseButtonEvent) bool {
+	if event.Button == sdl.BUTTON_RIGHT && event.State == sdl.PRESSED {
+		if !canvas.menu.Visible {
+			canvas.menu.Show(event.X, event.Y)
+		} else {
+			canvas.menu.Hide()
+		}
+	} else if canvas.menu.Visible {
+		canvas.menu.OnMouseButtonEvent(event)
+	}
+	return true
+}
+
 
 func (screen *Screen) Init(space sdl.Rect, rsc *Resources) {
 	topbarHeight := int32(32)
@@ -163,7 +211,7 @@ func (screen *Screen) Init(space sdl.Rect, rsc *Resources) {
 	screen.AddLayout(screen.TopBar)
 
 	screen.Canvas = &CanvasPane{}
-	screen.Canvas.Pos = sdl.Rect{space.X, space.Y + topbarHeight, space.W, space.H - topbarHeight}
+	screen.Canvas.Init(rsc, sdl.Rect{space.X, space.Y + topbarHeight, space.W, space.H - topbarHeight})
 	screen.AddVisual(screen.Canvas)
 	screen.AddLayout(screen.Canvas)
 
@@ -185,10 +233,11 @@ func run_studio(window *sdl.Window, rend *sdl.Renderer) {
 	stack.Add(screen.F2)
 	stack.Add(screen.Play)
 	stack.Add(screen.Stop)
+	stack.Add(screen.Canvas)
 	defer screen.Destroy()
 
 	framerate := gfx.NewFramerate()
-	framerate.SetFramerate(30)
+	framerate.SetFramerate(20)
 	event := &sdl.Event{}
 	running := true
 	for running {
@@ -212,8 +261,7 @@ func run_studio(window *sdl.Window, rend *sdl.Renderer) {
 
 		neww, newh = window.GetSize()
 		if neww != w || newh != h {
-			w = neww
-			h = newh
+			w, h = neww, newh
 			screen.UpdateLayout(sdl.Rect{0, 0, int32(w), int32(h)})
 		}
 
