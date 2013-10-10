@@ -28,6 +28,18 @@ type Node struct {
 	tex *sdl.Texture
 }
 
+type InputNode struct {
+	Node
+}
+
+type OutputNode struct {
+	Node
+}
+
+type EffectNode struct {
+	Node
+}
+
 type Link struct {
 	Widget
 	A *Node
@@ -135,7 +147,24 @@ func (canvas *CanvasPane) Init(rsc *Resources, space sdl.Rect) {
 
 	canvas.menu.OnClick(func(entry *MenuEntry) {
 		log.Println("Clicked: " + entry.Text)
+		if entry.Text == "New Input" {
+			canvas.NewInput()
+		} else if entry.Text == "New Output" {
+			canvas.NewOutput()
+		} else if entry.Text == "New Effect" {
+			canvas.NewEffect()
+		}
 	})
+}
+
+func (canvas *CanvasPane) NewInput() {
+	
+}
+
+func (canvas *CanvasPane) NewOutput() {
+}
+
+func (canvas *CanvasPane) NewEffect() {
 }
 
 func (canvas *CanvasPane) Draw(rend *sdl.Renderer) {
