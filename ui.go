@@ -1,9 +1,10 @@
 package main
 
 import (
+	"log"
+
 	"github.com/krig/Go-SDL2/sdl"
 	"github.com/krig/Go-SDL2/ttf"
-	"log"
 )
 
 type Visual interface {
@@ -232,10 +233,6 @@ func (label *Label) Destroy() {
 		label.texture.Destroy()
 		label.texture = nil
 	}
-}
-
-func hexcolor(code uint32) sdl.Color {
-	return sdl.Color{uint8((code >> 16) & 0xff), uint8((code >> 8) & 0xff), uint8(code & 0xff), 0xff}
 }
 
 func (label *Label) Update(rend *sdl.Renderer) {

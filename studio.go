@@ -1,9 +1,11 @@
 package main
 
 import (
+	"log"
+
 	"github.com/krig/Go-SDL2/sdl"
 	"github.com/krig/Go-SDL2/ttf"
-	"log"
+	"github.com/krig/go-sox"
 )
 
 type Resources struct {
@@ -15,6 +17,58 @@ type Resources struct {
 	BackgroundColor sdl.Color
 	TitleBarColor sdl.Color
 	TitleColor sdl.Color
+}
+
+type Screen struct {
+	Pane
+	TopBar *TopBar
+	F1 *Button
+	F2 *Button
+	Title *Label
+	Play *Button
+	Stop *Button
+
+	Canvas *CanvasPane
+	//Tracks *TrackPane
+	//Current *Pane
+}
+
+type InputStack struct {
+	lovers []MouseLover
+}
+
+type PopupMenu struct {
+	Widget
+	entries []*sdl.Texture
+	Visible bool
+}
+
+type Node struct {
+	Widget
+	label string
+	color sdl.Color
+	tex *sdl.Texture
+}
+
+type Link struct {
+	Widget
+	A *Node
+	B *Node
+	Color sdl.Color
+}
+
+type SoundChain struct {
+	in, out *sox.Format
+	chain *sox.EffectsChain
+	effects []*sox.Effect
+
+	nodes []*Node
+	links []*Link
+}
+
+type CanvasPane struct {
+	Pane
+	soundchain *SoundChain
 }
 
 func (r *Resources) Load(rend *sdl.Renderer) {
@@ -36,24 +90,6 @@ func (r *Resources) Free() {
 	r.PlayButton.Destroy()
 }
 
-type Screen struct {
-	Pane
-	TopBar *TopBar
-	F1 *Button
-	F2 *Button
-	Title *Label
-	Play *Button
-	Stop *Button
-
-	Canvas *CanvasPane
-	//Tracks *TrackPane
-	//Current *Pane
-}
-
-type InputStack struct {
-	lovers []MouseLover
-}
-
 func (stack *InputStack) Add(lover MouseLover) {
 	stack.lovers = append(stack.lovers, lover)
 }
@@ -70,29 +106,6 @@ func (stack *InputStack) OnMouseButtonEvent(event *sdl.MouseButtonEvent) bool {
 		l.OnMouseButtonEvent(event)
 	}
 	return true
-}
-
-type PopupMenu struct {
-	Widget
-	entries []*sdl.Texture
-	Visible bool
-}
-
-type Node struct {
-	Widget
-	Type int
-}
-
-type Link struct {
-	Widget
-	A *Node
-	B *Node
-}
-
-type CanvasPane struct {
-	Pane
-	nodes []*Node
-	links []*Link
 }
 
 func (menu *PopupMenu) Draw(rend *sdl.Renderer) {
