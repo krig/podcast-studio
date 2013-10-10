@@ -72,7 +72,7 @@ type MenuEntry struct {
 type PopupMenu struct {
 	Widget
 	entries []MenuEntry
-	hover *MenuEntry
+	hover int
 	Visible bool
 	Spacing, Inset int32
 	clickhandler func(entry *MenuEntry)
@@ -298,9 +298,9 @@ func (menu *PopupMenu) Draw(rend *sdl.Renderer) {
 	rend.FillRect(&menu.Pos)
 	rend.SetDrawColor(hexcolor(0x363636))
 	rend.DrawRect(&menu.Pos)
-	if menu.hover != nil {
-		rend.SetDrawColor(hexcolor(0x40ff40))
-		rend.FillRect(&menu.hover.label.Pos)
+	if menu.hover != -1 {
+		rend.SetDrawColor(hexcolor(0x406f40))
+		rend.FillRect(&menu.entries[menu.hover].label.Pos)
 	}
 	for _, e := range menu.entries {
 		e.Draw(rend)
@@ -321,15 +321,12 @@ func (menu *PopupMenu) Show(x, y int32) {
 		e.label.Pos.X = new_x
 		e.label.Pos.Y = new_y
 		new_y += menu.Spacing
-		if e.label.Pos.Contains(x, y) {
-			menu.hover = &e
-		}
 	}
 }
 
 func (menu *PopupMenu) Hide() {
 	menu.Visible = false
-	menu.hover = nil
+	menu.hover = -1
 }
 
 func (entry *MenuEntry) Init(rend *sdl.Renderer, space sdl.Rect, text string, font *ttf.Font, color sdl.Color) {
@@ -343,11 +340,12 @@ func (entry *MenuEntry) Draw(rend *sdl.Renderer) {
 }
 
 func (menu *PopupMenu) OnMouseMotionEvent(event *sdl.MouseMotionEvent) bool {
-	menu.hover = nil
+	menu.hover = -1
 	if menu.Visible {
-		for _, e := range menu.entries {
+		for i, e := range menu.entries {
 			if e.label.Pos.Contains(event.X, event.Y) {
-				menu.hover = &e
+				//log.Println(e.Text, e.label.Pos, "contains", event.X, event.Y)
+				menu.hover = i
 			}
 		}
 	} else {
@@ -360,11 +358,14 @@ func (menu *PopupMenu) OnMouseButtonEvent(event *sdl.MouseButtonEvent) bool {
 		if event.Button == sdl.BUTTON_LEFT {
 			contains := menu.Pos.Contains(event.X, event.Y)
 			pressed := event.State == sdl.PRESSED
-			was_pressed := menu.hover != nil
+			was_pressed := menu.hover != -1
 			if was_pressed && !pressed && contains {
 				if menu.clickhandler != nil {
-					menu.clickhandler(menu.hover)
+					menu.clickhandler(&menu.entries[menu.hover])
 				}
+			}
+			if was_pressed && !pressed {
+				menu.Hide()
 			}
 		}
 	}
