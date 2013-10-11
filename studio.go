@@ -4,6 +4,7 @@ package main
 import (
 	"log"
 	"math"
+	"runtime"
 
 	"github.com/krig/Go-SDL2/sdl"
 	"github.com/krig/Go-SDL2/ttf"
@@ -143,10 +144,9 @@ func (chain *SoxChain) Release() {
 }
 
 func (chain *SoxChain) Flow() {
-	//chain.chain.Flow()
 	chain.chain.FlowCallback(func(all_done bool) int {
 		if chain.interrupt {
-		return 1
+			return 1
 		}
 		return 0
 	})
@@ -447,7 +447,7 @@ func (canvas *CanvasPane) OnMouseButtonEvent(event *sdl.MouseButtonEvent) bool {
 	return true
 }
 
-func (canvas *CanvasPane) Play() {
+func (canvas *CanvasPane) BuildPlayChain() func() {
 	if canvas.playing != nil && canvas.playing.finished {
 		canvas.playing.Release()
 		canvas.playing = nil
@@ -463,14 +463,14 @@ func (canvas *CanvasPane) Play() {
 	}
 	if start == nil || len(start.args) != 1 {
 		log.Println("Nothing to play.")
-		return
+		return func() {}
 	}
 
 	var stop *Node
 	for n2 := start.next; n2 != nil; n2 = n2.next {
 		if n2 == start {
 			log.Println("Loop detected!")
-			return
+			return func() {}
 		} else if n2.name == "output" {
 			stop = n2
 		}
@@ -478,18 +478,18 @@ func (canvas *CanvasPane) Play() {
 
 	if stop == nil {
 		log.Println("Nothing to play to.")
-		return
+		return func() {}
 	}
 
 	in := sox.OpenRead(start.args[0])
 	if in == nil {
 		log.Println("Failed to open input file.")
-		return
+		return func() {}
 	}
 	out := sox.OpenWrite("default", in.Signal(), nil, "alsa")
 	if out == nil {
 		log.Println("Failed to open output device.")
-		return
+		return func() {}
 	}
 	chain := sox.CreateEffectsChain(in.Encoding(), out.Encoding())
 
@@ -505,7 +505,16 @@ func (canvas *CanvasPane) Play() {
 
 	canvas.playing = &SoxChain{chain, in, out, false, false}
 
-	canvas.playing.Flow()
+	return func() {
+		canvas.playing.Flow()
+	}
+}
+
+func (canvas *CanvasPane) Play() {
+
+	fn := canvas.BuildPlayChain()
+	go fn()
+	//go canvas.playing.Flow()
 }
 
 func (canvas *CanvasPane) Stop() {
@@ -572,6 +581,8 @@ func (screen *Screen) UpdateAnimations(delta float64) {
 }
 
 func run_studio(window *sdl.Window, rend *sdl.Renderer, tracks []string) {
+	runtime.LockOSThread()
+
 	rsc := &Resources{}
 	rsc.Load(rend)
 	defer rsc.Free()
