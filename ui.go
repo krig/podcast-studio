@@ -279,6 +279,13 @@ func (menu *PopupMenu) Init(rend *sdl.Renderer, space sdl.Rect, entries []string
 	menu.Pos.W = max_w + menu.Inset*2
 	menu.Pos.H = int32(len(entries))*menu.Spacing + menu.Inset*2
 
+	if menu.Pos.W < 100 {
+		menu.Pos.W = 100
+	}
+	if menu.Pos.H < menu.Spacing*2 {
+		menu.Pos.H = menu.Spacing*2
+	}
+
 	for _, e := range menu.entries {
 		e.label.Pos.W = menu.Pos.W - menu.Inset*2
 		e.label.Pos.H = menu.Spacing
@@ -298,7 +305,7 @@ func (menu *PopupMenu) Draw(rend *sdl.Renderer) {
 	rend.FillRect(&menu.Pos)
 	rend.SetDrawColor(hexcolor(0x363636))
 	rend.DrawRect(&menu.Pos)
-	if menu.hover != -1 {
+	if menu.hover != -1 && menu.hover < len(menu.entries) {
 		rend.SetDrawColor(hexcolor(0x406f40))
 		rend.FillRect(&menu.entries[menu.hover].label.Pos)
 	}

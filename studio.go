@@ -3,11 +3,16 @@ package main
 
 import (
 	"log"
+	"math"
 
 	"github.com/krig/Go-SDL2/sdl"
 	"github.com/krig/Go-SDL2/ttf"
 	"github.com/krig/Go-SDL2/gfx"
 	"github.com/krig/go-sox"
+)
+
+const (
+	TOPBAR_HEIGHT = int32(32)
 )
 
 type Resources struct {
@@ -21,39 +26,131 @@ type Resources struct {
 	TitleColor sdl.Color
 }
 
+type FloatPos struct {
+	X float64
+	Y float64
+}
+
 type Node struct {
 	Widget
-	label string
+	label Label
 	color sdl.Color
-	tex *sdl.Texture
+	dragging bool
+	curr FloatPos
+	goal FloatPos
+	menu PopupMenu
+
+	name string
+	args []string
+
+	next *Node
 }
 
-type InputNode struct {
-	Node
+// Color scheme:
+// teal: 15f0e1
+// red: ff3015
+// green: 5be33b
+// yellow: ffe018
+// blue: 694ae9
+
+
+func (node *Node) DrawLink(rend *sdl.Renderer) {
+	if node.next != nil {
+		rend.SetDrawColor(hexcolor(0x15f0e1))
+		p0 := node.Pos
+		p1 := node.next.Pos
+		rend.DrawLine(p0.X + p0.W/2, p0.Y + p0.H/2, p1.X + p1.W/2, p1.Y + p1.H/2)
+	}
 }
 
-type OutputNode struct {
-	Node
+func (node *Node) Draw(rend *sdl.Renderer) {
+	if node.dragging {
+		node.curr.X += (node.goal.X - node.curr.X) * (15.0 / 30.0)
+		node.curr.Y += (node.goal.Y - node.curr.Y) * (15.0 / 30.0)
+		node.Pos.X = int32(node.curr.X)
+		node.Pos.Y = int32(node.curr.Y)
+		node.label.Pos = node.Pos
+	}
+
+	clr := node.color
+	if !node.dragging {
+		rend.SetDrawColor(clr)
+		rend.FillRect(&node.Pos)
+	}
+	rend.SetDrawColor(lighten(clr, 19))
+	rend.DrawRect(&node.Pos)
+	node.label.Draw(rend)
+
+	if node.menu.Visible {
+		node.menu.Draw(rend)
+	}
 }
 
-type EffectNode struct {
-	Node
+func (node *Node) OnMouseMotionEvent(event *sdl.MouseMotionEvent) bool {
+	if node.dragging {
+		node.goal.X += float64(event.XRel)
+		node.goal.Y += float64(event.YRel)
+
+		node.goal.X = math.Max(node.goal.X, 0.0)
+		node.goal.Y = math.Max(node.goal.Y, float64(TOPBAR_HEIGHT))
+	}
+	if node.menu.Visible {
+		node.menu.OnMouseMotionEvent(event)
+	}
+	return true
 }
 
-type Link struct {
-	Widget
-	A *Node
-	B *Node
-	Color sdl.Color
+func (node *Node) OnMouseButtonEvent(event *sdl.MouseButtonEvent) bool {
+	lpress := event.State == sdl.PRESSED && event.Button == sdl.BUTTON_LEFT
+	rpress := event.State == sdl.PRESSED && event.Button == sdl.BUTTON_RIGHT
+
+	if node.menu.Visible {
+		node.menu.OnMouseButtonEvent(event)
+	}
+	if node.Pos.Contains(event.X, event.Y) {
+		if lpress {
+			node.dragging = true
+			node.goal.X = float64(node.Pos.X)
+			node.goal.Y = float64(node.Pos.Y)
+			node.curr = node.goal
+		}
+		if rpress && !node.menu.Visible {
+			node.menu.Show(event.X, event.Y)
+		} else if rpress {
+			node.menu.Hide()
+		}
+	}
+	if node.dragging && event.State == sdl.RELEASED {
+		node.dragging = false
+	}
+	return true
 }
 
-type SoundChain struct {
-	in, out *sox.Format
+
+
+// TODO
+type SoxChain struct {
 	chain *sox.EffectsChain
-	effects []*sox.Effect
+	in, out *sox.Format
+	interrupt bool
+	finished bool
+}
 
-	nodes []*Node
-	links []*Link
+func (chain *SoxChain) Release() {
+	chain.chain.Release()
+	chain.in.Release()
+	chain.out.Release()
+}
+
+func (chain *SoxChain) Flow() {
+	//chain.chain.Flow()
+	chain.chain.FlowCallback(func(all_done bool) int {
+		if chain.interrupt {
+		return 1
+		}
+		return 0
+	})
+	chain.finished = true
 }
 
 type TopBar struct {
@@ -63,8 +160,21 @@ type TopBar struct {
 
 type CanvasPane struct {
 	Pane
-	soundchain SoundChain
 	menu PopupMenu
+
+	rsc *Resources
+
+	tracks []string
+
+	nodes []*Node
+	new_link *int
+
+	playing *SoxChain
+}
+
+type ListWindow struct {
+	Widget
+	title_text Label
 }
 
 type Screen struct {
@@ -77,6 +187,7 @@ type Screen struct {
 	Stop *Button
 
 	Canvas *CanvasPane
+
 	//Tracks *TrackPane
 	//Current *Pane
 }
@@ -117,7 +228,9 @@ func (stack *InputStack) OnMouseMotionEvent(event *sdl.MouseMotionEvent) bool {
 
 func (stack *InputStack) OnMouseButtonEvent(event *sdl.MouseButtonEvent) bool {
 	for _, l := range stack.lovers {
-		l.OnMouseButtonEvent(event)
+		if !l.OnMouseButtonEvent(event) {
+			return false
+		}
 	}
 	return true
 }
@@ -141,66 +254,270 @@ func (tb *TopBar) Draw(rend *sdl.Renderer) {
 	}
 }
 
-func (canvas *CanvasPane) Init(rsc *Resources, space sdl.Rect) {
+func (canvas *CanvasPane) Init(rsc *Resources, space sdl.Rect, tracks []string) {
+	canvas.rsc = rsc
 	canvas.Pos = space
-	canvas.menu.Init(rsc.renderer, space, []string{"New Input", "New Output", "New Effect"}, rsc.TitleFont)
+	canvas.tracks = tracks
+	canvas.menu.Init(rsc.renderer, space, []string{"+input", "+output", "+effect"}, rsc.TitleFont)
 
 	canvas.menu.OnClick(func(entry *MenuEntry) {
 		log.Println("Clicked: " + entry.Text)
-		if entry.Text == "New Input" {
+		if entry.Text == "+input" {
 			canvas.NewInput()
-		} else if entry.Text == "New Output" {
+		} else if entry.Text == "+output" {
 			canvas.NewOutput()
-		} else if entry.Text == "New Effect" {
+		} else if entry.Text == "+effect" {
 			canvas.NewEffect()
 		}
 	})
 }
 
 func (canvas *CanvasPane) NewInput() {
-	
+	n := &Node{}
+	n.Pos = canvas.menu.Pos
+	n.Pos.W = 64
+	n.Pos.H = 48
+	n.color = hexcolor(0x5be33b)
+	n.name = "input"
+	n.label.Init(canvas.rsc.renderer, n.Pos, n.name, canvas.rsc.TitleFont, hexcolor(0x303030))
+
+	n.menu.Init(canvas.rsc.renderer,
+		n.Pos,
+		canvas.tracks,
+		canvas.rsc.TitleFont)
+	canvas.nodes = append(canvas.nodes, n)
+
+	n.menu.OnClick(func(entry *MenuEntry) {
+		log.Println("Input clicked: " + entry.Text)
+		n.args = make([]string, 1, 1)
+		n.args[0] = entry.Text
+		n.label.Text = entry.Text
+		n.label.Update(canvas.rsc.renderer)
+		if n.Pos.W < n.label.texwidth + 8 {
+			n.Pos.W = n.label.texwidth + 8
+		}
+		if n.Pos.H < n.label.texheight + 8 {
+			n.Pos.H = n.label.texheight + 8
+		}
+		n.label.Pos = n.Pos
+	})
 }
 
 func (canvas *CanvasPane) NewOutput() {
+	n := &Node{}
+	n.Pos = canvas.menu.Pos
+	n.Pos.W = 64
+	n.Pos.H = 48
+	n.color = hexcolor(0xff3015)
+	n.name = "output"
+	n.label.Init(canvas.rsc.renderer, n.Pos, n.name, canvas.rsc.TitleFont, hexcolor(0x303030))
+	canvas.nodes = append(canvas.nodes, n)
 }
 
 func (canvas *CanvasPane) NewEffect() {
+	n := &Node{}
+	n.Pos = canvas.menu.Pos
+	n.Pos.W = 64
+	n.Pos.H = 48
+	n.color = hexcolor(0xffe018)
+	n.name = "(null-fx)"
+	n.label.Init(canvas.rsc.renderer, n.Pos, n.name, canvas.rsc.TitleFont, hexcolor(0x303030))
+
+	effects := make([]string, 0, 10)
+	for i, h := range sox.GetEffectHandlers() {
+		if i < 10 {
+			effects = append(effects, h.Name())
+		}
+	}
+	n.menu.Init(canvas.rsc.renderer, n.Pos, effects, canvas.rsc.TitleFont)
+	canvas.nodes = append(canvas.nodes, n)
+
+	n.menu.OnClick(func(entry *MenuEntry) {
+		n.label.Text = entry.Text
+		n.label.Update(canvas.rsc.renderer)
+		if n.Pos.W < n.label.texwidth + 8 {
+			n.Pos.W = n.label.texwidth + 8
+		}
+		if n.Pos.H < n.label.texheight + 8 {
+			n.Pos.H = n.label.texheight + 8
+		}
+		n.label.Pos = n.Pos
+	})
 }
 
 func (canvas *CanvasPane) Draw(rend *sdl.Renderer) {
+
+	for _, n := range canvas.nodes {
+		n.DrawLink(rend)
+	}
+
+	for _, n := range canvas.nodes {
+		n.Draw(rend)
+	}
+
 	canvas.menu.Draw(rend)
+
+	if canvas.new_link != nil {
+		_, x, y := sdl.GetMouseState()
+		n0 := canvas.nodes[*canvas.new_link]
+		rend.SetDrawColor(hexcolor(0xffffff))
+		pos := n0.GetPos()
+		rend.DrawRect(&pos)
+		rend.SetDrawColor(hexcolor(0x694ae9))
+		rend.DrawLine(n0.GetPos().X + n0.GetPos().W/2, n0.GetPos().Y + n0.GetPos().H/2, int32(x), int32(y))
+	}
 }
 
 func (canvas *CanvasPane) UpdateLayout(space sdl.Rect) {
+	canvas.Pos.W = space.W
+	canvas.Pos.H = space.H - canvas.Pos.Y
 	canvas.menu.UpdateLayout(space)
 }
 
 func (canvas *CanvasPane) OnMouseMotionEvent(event *sdl.MouseMotionEvent) bool {
 	if canvas.menu.Visible {
 		canvas.menu.OnMouseMotionEvent(event)
+	} else {
+		for _, n := range canvas.nodes {
+			n.OnMouseMotionEvent(event)
+		}
 	}
 	return true
 }
 
 func (canvas *CanvasPane) OnMouseButtonEvent(event *sdl.MouseButtonEvent) bool {
+	if event.State == sdl.RELEASED && canvas.new_link != nil {
+		to := -1
+		for i, n := range canvas.nodes {
+			pos := n.GetPos()
+			if pos.Contains(event.X, event.Y) {
+				to = i
+				break
+			}
+		}
+		if to != -1 && to != *canvas.new_link && canvas.nodes[to].name != "input" {
+			canvas.nodes[*canvas.new_link].next = canvas.nodes[to]
+		}
+		canvas.new_link = nil
+	}
+
 	if event.Button == sdl.BUTTON_RIGHT && event.State == sdl.PRESSED {
 		if !canvas.menu.Visible {
-			canvas.menu.Show(event.X, event.Y)
+			hitsbox := false
+			for _, n := range canvas.nodes {
+				p := n.GetPos()
+				if p.Contains(event.X, event.Y) {
+					hitsbox = true
+					break
+				}
+			}
+			if !hitsbox && canvas.Pos.Contains(event.X, event.Y) {
+				canvas.menu.Show(event.X, event.Y)
+				return false
+			}
 		} else {
 			canvas.menu.Hide()
 		}
-	} else if canvas.menu.Visible {
+	}
+	if canvas.menu.Visible {
 		canvas.menu.OnMouseButtonEvent(event)
+	} else {
+		lpress := event.State == sdl.PRESSED && event.Button == sdl.BUTTON_LEFT
+		if ((sdl.GetModState() & sdl.KMOD_SHIFT) != 0) && lpress {
+			from := -1
+			for i, n := range canvas.nodes {
+				pos := n.GetPos()
+				if pos.Contains(event.X, event.Y) {
+					from = i
+					break
+				}
+			}
+			if from >= 0 && canvas.nodes[from].name != "output" {
+				log.Println("Start linking from node", from)
+				canvas.new_link = &from
+			}
+		} else {
+			for _, n := range canvas.nodes {
+				if !n.OnMouseButtonEvent(event) {
+					break
+				}
+			}
+		}
 	}
 	return true
 }
 
+func (canvas *CanvasPane) Play() {
+	if canvas.playing != nil && canvas.playing.finished {
+		canvas.playing.Release()
+		canvas.playing = nil
+	}
 
-func (screen *Screen) Init(space sdl.Rect, rsc *Resources) {
-	topbarHeight := int32(32)
+	// find an input
+	var start *Node
+	for _, n := range canvas.nodes {
+		if n.name == "input" {
+			start = n
+			break
+		}
+	}
+	if start == nil || len(start.args) != 1 {
+		log.Println("Nothing to play.")
+		return
+	}
+
+	var stop *Node
+	for n2 := start.next; n2 != nil; n2 = n2.next {
+		if n2 == start {
+			log.Println("Loop detected!")
+			return
+		} else if n2.name == "output" {
+			stop = n2
+		}
+	}
+
+	if stop == nil {
+		log.Println("Nothing to play to.")
+		return
+	}
+
+	in := sox.OpenRead(start.args[0])
+	if in == nil {
+		log.Println("Failed to open input file.")
+		return
+	}
+	out := sox.OpenWrite("default", in.Signal(), nil, "alsa")
+	if out == nil {
+		log.Println("Failed to open output device.")
+		return
+	}
+	chain := sox.CreateEffectsChain(in.Encoding(), out.Encoding())
+
+	e := sox.CreateEffect(sox.FindEffect("input"))
+	e.Options(in)
+	chain.Add(e, in.Signal(), in.Signal())
+	e.Release()
+
+	e = sox.CreateEffect(sox.FindEffect("output"))
+	e.Options(out)
+	chain.Add(e, in.Signal(), in.Signal())
+	e.Release()
+
+	canvas.playing = &SoxChain{chain, in, out, false, false}
+
+	canvas.playing.Flow()
+}
+
+func (canvas *CanvasPane) Stop() {
+	if canvas.playing != nil {
+		canvas.playing.interrupt = true
+	}
+}
+
+func (screen *Screen) Init(space sdl.Rect, rsc *Resources, tracks []string) {
 	screen.Pos = space
 	screen.TopBar = &TopBar{}
-	screen.TopBar.Init(sdl.Rect{space.X, space.Y, space.W, topbarHeight})
+	screen.TopBar.Init(sdl.Rect{space.X, space.Y, space.W, TOPBAR_HEIGHT})
 	screen.TopBar.BackgroundColor = rsc.TitleBarColor
 	screen.F1 = &Button{}
 	screen.F2 = &Button{}
@@ -216,9 +533,19 @@ func (screen *Screen) Init(space sdl.Rect, rsc *Resources) {
 
 	screen.F1.Init(rsc.renderer, sdl.Rect{space.X, space.Y, 1, 1}, rsc.LEDButton)
 	screen.F2.Init(rsc.renderer, sdl.Rect{screen.F1.Pos.X + screen.F1.Pos.W, space.Y, 1, 1}, rsc.LEDButton)
-	screen.Title.Init(rsc.renderer, sdl.Rect{screen.F2.Pos.X + screen.F2.Pos.W, space.Y, 1, topbarHeight}, "canvas mode", rsc.TitleFont, rsc.TitleColor)
+	screen.Title.Init(rsc.renderer, sdl.Rect{screen.F2.Pos.X + screen.F2.Pos.W, space.Y, 1, TOPBAR_HEIGHT}, "canvas mode", rsc.TitleFont, rsc.TitleColor)
 	screen.Play.Init(rsc.renderer, sdl.Rect{screen.Title.Pos.X + screen.Title.Pos.W, space.Y, 1, 1}, rsc.PlayButton)
 	screen.Stop.Init(rsc.renderer, sdl.Rect{screen.Play.Pos.X + screen.Play.Pos.W, space.Y, 1, 1}, rsc.StopButton)
+
+	screen.AddVisual(screen.TopBar)
+	screen.AddLayout(screen.TopBar)
+
+	screen.Canvas = &CanvasPane{}
+	screen.Canvas.Init(rsc, sdl.Rect{space.X, space.Y + TOPBAR_HEIGHT, space.W, space.H - TOPBAR_HEIGHT}, tracks)
+	screen.AddVisual(screen.Canvas)
+	screen.AddLayout(screen.Canvas)
+
+	screen.UpdateLayout(space)
 
 	screen.F1.OnClick(func() {
 		log.Println("Canvas Mode clicked!")
@@ -230,25 +557,21 @@ func (screen *Screen) Init(space sdl.Rect, rsc *Resources) {
 
 	screen.Play.OnClick(func() {
 		log.Println("Play clicked!")
+		screen.Canvas.Play()
 	})
 
 	screen.Stop.OnClick(func() {
 		log.Println("Stop clicked!")
+		screen.Canvas.Stop()
 	})
 
-	screen.AddVisual(screen.TopBar)
-	screen.AddLayout(screen.TopBar)
-
-	screen.Canvas = &CanvasPane{}
-	screen.Canvas.Init(rsc, sdl.Rect{space.X, space.Y + topbarHeight, space.W, space.H - topbarHeight})
-	screen.AddVisual(screen.Canvas)
-	screen.AddLayout(screen.Canvas)
-
-	screen.UpdateLayout(space)
 }
 
+func (screen *Screen) UpdateAnimations(delta float64) {
+	// TODO
+}
 
-func run_studio(window *sdl.Window, rend *sdl.Renderer) {
+func run_studio(window *sdl.Window, rend *sdl.Renderer, tracks []string) {
 	rsc := &Resources{}
 	rsc.Load(rend)
 	defer rsc.Free()
@@ -256,7 +579,7 @@ func run_studio(window *sdl.Window, rend *sdl.Renderer) {
 	w, h := window.GetSize()
 	neww, newh := w, h
 	screen := &Screen{}
-	screen.Init(sdl.Rect{0, 0, int32(w), int32(h)}, rsc)
+	screen.Init(sdl.Rect{0, 0, int32(w), int32(h)}, rsc, tracks)
 	stack := &InputStack{}
 	stack.Add(screen.F1)
 	stack.Add(screen.F2)
@@ -266,7 +589,7 @@ func run_studio(window *sdl.Window, rend *sdl.Renderer) {
 	defer screen.Destroy()
 
 	framerate := gfx.NewFramerate()
-	framerate.SetFramerate(20)
+	framerate.SetFramerate(30)
 	event := &sdl.Event{}
 	running := true
 	for running {
@@ -293,6 +616,8 @@ func run_studio(window *sdl.Window, rend *sdl.Renderer) {
 			w, h = neww, newh
 			screen.UpdateLayout(sdl.Rect{0, 0, int32(w), int32(h)})
 		}
+
+		screen.UpdateAnimations(framerate.Delta())
 
 		rend.SetDrawBlendMode(sdl.BLENDMODE_NONE)
 		rend.SetDrawColor(rsc.BackgroundColor)

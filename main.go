@@ -12,15 +12,10 @@ import (
 func main() {
 	// Parse command line
 	flag.Parse()
-	session := "default"
 	tracks := []string{}
 	if flag.NArg() > 0 {
-		session = flag.Arg(0)
+		tracks = flag.Args()[0:]
 	}
-	if flag.NArg() > 1 {
-		tracks = flag.Args()[1:]
-	}
-	log.Println("Session: ", session)
 	log.Println("Tracks: ", tracks)
 
 	// Init libSoX and SDL
@@ -60,5 +55,5 @@ func main() {
 	window.SetTitle("Podcast Studio")
 	log.Println("Video Driver:", sdl.GetCurrentVideoDriver())
 	// Jump to studio.go
-	run_studio(window, renderer)
+	run_studio(window, renderer, tracks)
 }
