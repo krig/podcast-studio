@@ -4,7 +4,7 @@ package main
 import (
 	"log"
 	"math"
-	"runtime"
+	"path/filepath"
 
 	"github.com/krig/Go-SDL2/sdl"
 	"github.com/krig/Go-SDL2/ttf"
@@ -186,7 +186,12 @@ type Screen struct {
 	Play *Button
 	Stop *Button
 
+	rsc *Resources
 	Canvas *CanvasPane
+
+	stack InputStack
+
+	framerate *gfx.FPSmanager
 
 	//Tracks *TrackPane
 	//Current *Pane
@@ -281,17 +286,10 @@ func (canvas *CanvasPane) NewInput() {
 	n.name = "input"
 	n.label.Init(canvas.rsc.renderer, n.Pos, n.name, canvas.rsc.TitleFont, hexcolor(0x303030))
 
-	n.menu.Init(canvas.rsc.renderer,
-		n.Pos,
-		canvas.tracks,
-		canvas.rsc.TitleFont)
-	canvas.nodes = append(canvas.nodes, n)
-
-	n.menu.OnClick(func(entry *MenuEntry) {
-		log.Println("Input clicked: " + entry.Text)
+	openFileDialog(func(filename string) {
 		n.args = make([]string, 1, 1)
-		n.args[0] = entry.Text
-		n.label.Text = entry.Text
+		n.args[0] = filename
+		n.label.Text = filepath.Base(filename)
 		n.label.Update(canvas.rsc.renderer)
 		if n.Pos.W < n.label.texwidth + 8 {
 			n.Pos.W = n.label.texwidth + 8
@@ -301,6 +299,27 @@ func (canvas *CanvasPane) NewInput() {
 		}
 		n.label.Pos = n.Pos
 	})
+
+	//n.menu.Init(canvas.rsc.renderer,
+	//	n.Pos,
+	//	[]string{"Open File..."},
+	//	canvas.rsc.TitleFont)
+	canvas.nodes = append(canvas.nodes, n)
+
+	//n.menu.OnClick(func(entry *MenuEntry) {
+	//	log.Println("Input clicked: " + entry.Text)
+	//	n.args = make([]string, 1, 1)
+	// 	n.args[0] = entry.Text
+	// 	n.label.Text = entry.Text
+	// 	n.label.Update(canvas.rsc.renderer)
+	// 	if n.Pos.W < n.label.texwidth + 8 {
+	// 		n.Pos.W = n.label.texwidth + 8
+	// 	}
+	// 	if n.Pos.H < n.label.texheight + 8 {
+	// 		n.Pos.H = n.label.texheight + 8
+	// 	}
+	// 	n.label.Pos = n.Pos
+	// })
 }
 
 func (canvas *CanvasPane) NewOutput() {
@@ -525,6 +544,7 @@ func (canvas *CanvasPane) Stop() {
 
 func (screen *Screen) Init(space sdl.Rect, rsc *Resources, tracks []string) {
 	screen.Pos = space
+	screen.rsc = rsc
 	screen.TopBar = &TopBar{}
 	screen.TopBar.Init(sdl.Rect{space.X, space.Y, space.W, TOPBAR_HEIGHT})
 	screen.TopBar.BackgroundColor = rsc.TitleBarColor
@@ -580,62 +600,64 @@ func (screen *Screen) UpdateAnimations(delta float64) {
 	// TODO
 }
 
-func run_studio(window *sdl.Window, rend *sdl.Renderer, tracks []string) {
-	runtime.LockOSThread()
-
+func studioSetup(window *sdl.Window, rend *sdl.Renderer, tracks []string) *Screen {
 	rsc := &Resources{}
 	rsc.Load(rend)
-	defer rsc.Free()
+	//defer rsc.Free()
 
 	w, h := window.GetSize()
-	neww, newh := w, h
+	//neww, newh := w, h
 	screen := &Screen{}
 	screen.Init(sdl.Rect{0, 0, int32(w), int32(h)}, rsc, tracks)
-	stack := &InputStack{}
-	stack.Add(screen.F1)
-	stack.Add(screen.F2)
-	stack.Add(screen.Play)
-	stack.Add(screen.Stop)
-	stack.Add(screen.Canvas)
-	defer screen.Destroy()
+	screen.stack.Add(screen.F1)
+	screen.stack.Add(screen.F2)
+	screen.stack.Add(screen.Play)
+	screen.stack.Add(screen.Stop)
+	screen.stack.Add(screen.Canvas)
+	//defer screen.Destroy()
 
-	framerate := gfx.NewFramerate()
-	framerate.SetFramerate(30)
-	event := &sdl.Event{}
+	screen.framerate = gfx.NewFramerate()
+	screen.framerate.SetFramerate(60)
+
+	return screen
+	//running := true
+	//for running {
+	//}
+}
+
+func studioUpdate(window *sdl.Window, rend *sdl.Renderer, screen *Screen) bool {
+	var event sdl.Event
 	running := true
-	for running {
-		for event.Poll() {
-			switch e := event.Get().(type) {
-			case sdl.QuitEvent:
+	for (&event).Poll() {
+		switch e := (&event).Get().(type) {
+		case sdl.QuitEvent:
+			running = false
+
+		case sdl.KeyboardEvent:
+			if e.Keysym.Keycode == sdl.K_ESCAPE {
 				running = false
-
-			case sdl.KeyboardEvent:
-				if e.Keysym.Keycode == sdl.K_ESCAPE {
-					running = false
-				}
-
-			case sdl.MouseMotionEvent:
-				stack.OnMouseMotionEvent(&e)
-
-			case sdl.MouseButtonEvent:
-				stack.OnMouseButtonEvent(&e)
 			}
+
+		case sdl.MouseMotionEvent:
+			screen.stack.OnMouseMotionEvent(&e)
+
+		case sdl.MouseButtonEvent:
+			screen.stack.OnMouseButtonEvent(&e)
 		}
-
-		neww, newh = window.GetSize()
-		if neww != w || newh != h {
-			w, h = neww, newh
-			screen.UpdateLayout(sdl.Rect{0, 0, int32(w), int32(h)})
-		}
-
-		screen.UpdateAnimations(framerate.Delta())
-
-		rend.SetDrawBlendMode(sdl.BLENDMODE_NONE)
-		rend.SetDrawColor(rsc.BackgroundColor)
-		rend.Clear()
-		rend.SetDrawBlendMode(sdl.BLENDMODE_BLEND)
-		screen.Draw(rend)
-		rend.Present()
-		framerate.FramerateDelay()
 	}
+
+	neww, newh := window.GetSize()
+	screen.UpdateLayout(sdl.Rect{0, 0, int32(neww), int32(newh)})
+
+	//screen.UpdateAnimations(framerate.Delta())
+
+	rend.SetDrawBlendMode(sdl.BLENDMODE_NONE)
+	rend.SetDrawColor(screen.rsc.BackgroundColor)
+	rend.Clear()
+	rend.SetDrawBlendMode(sdl.BLENDMODE_BLEND)
+	screen.Draw(rend)
+	rend.Present()
+	screen.framerate.FramerateDelay()
+
+	return running
 }
