@@ -67,14 +67,22 @@ func main() {
 
 	gtk.Init(nil)
 
+	//sdl.GL_SetAttribute(sdl.GL_CONTEXT_MAJOR_VERSION, 2)
+	//sdl.GL_SetAttribute(sdl.GL_CONTEXT_MINOR_VERSION, 1)
+	//sdl.GL_SetAttribute(sdl.GL_DOUBLEBUFFER, 1)
+	//sdl.GL_SetAttribute(sdl.GL_DEPTH_SIZE, 24)
+
 	window, renderer := sdl.CreateWindowAndRenderer(640, 480,
 		sdl.WINDOW_SHOWN | sdl.WINDOW_OPENGL | sdl.RENDERER_ACCELERATED | sdl.RENDERER_PRESENTVSYNC)
 	if (window == nil) || (renderer == nil) {
 		log.Fatal(sdl.GetError())
 	}
+	//window.GL_CreateContext()
+
 	if ttf.Init() != 0 {
 		log.Fatal(sdl.GetError())
 	}
+
 
 	defer window.Destroy()
 	defer renderer.Destroy()
